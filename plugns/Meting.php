@@ -458,18 +458,69 @@ class Meting
 	{
 		switch ($this->server) {
 			case 'netease':
-				$api = array(
-					'method'=> 'POST',
-					'url'	=> 'http://music.163.com/api/v6/playlist/detail',
-					'body'	=> array(
-						's'		=> '0',
-						'id'	=> $id,
-						'n'		=> '5000',
-						't'		=> '0',
+				// This implements the "get all track IDs, then get details in chunks" method.
+				// It is consistent with the approach used by official clients to get full playlists.
+
+				// Step 1: Get all track IDs from the playlist.
+				// Using the `/playlist/track/all` endpoint is the cleanest way.
+				$api_get_ids = array(
+					'method' => 'POST',
+					'url'    => 'http://music.163.com/api/playlist/track/all',
+					'body'   => array(
+						'id' => $id,
+						'n'  => 100000,
+						's'  => 8,
 					),
-					'encode'=> 'netease_AESCBC',
-					'format'=> 'playlist.tracks',
+					'encode' => 'netease_AESCBC',
 				);
+				
+				// Execute without auto-formatting to get the raw JSON
+				$raw_data = $this->format(false)->exec($api_get_ids);
+				$playlist_data = json_decode($raw_data, true);
+
+				// The 'track/all' endpoint returns 'privileges'. We need to extract IDs from it.
+				if (!isset($playlist_data['privileges'])) {
+					return json_encode([]); // Return empty if no track IDs found
+				}
+
+				$track_ids = array_map(function ($track) {
+					return $track['id'];
+				}, $playlist_data['privileges']);
+
+				// Step 2: Get details for all tracks in chunks.
+				$id_chunks = array_chunk($track_ids, 500); // Process in chunks of 500
+				$full_track_list = [];
+
+				foreach ($id_chunks as $chunk) {
+					// Prepare the 'c' parameter for the song detail API, which expects a JSON array of objects
+					$c_param = array_map(function($trackId) {
+						return ['id' => $trackId];
+					}, $chunk);
+
+					$api_get_details = array(
+						'method' => 'POST',
+						'url'    => 'http://music.163.com/api/v3/song/detail/',
+						'body'   => array(
+							'c' => json_encode($c_param),
+						),
+						'encode' => 'netease_AESCBC',
+					);
+
+					$raw_details = $this->exec($api_get_details); // exec will keep format as false
+					$details_data = json_decode($raw_details, true);
+
+					if (isset($details_data['songs'])) {
+						$full_track_list = array_merge($full_track_list, $details_data['songs']);
+					}
+				}
+
+				// Step 3: Format the final result using the class's standard formatter.
+				$this->format(true); // Re-enable formatting for the final step
+				
+				// Wrap the result in a 'songs' key and use 'songs' as the rule.
+				// This makes it compatible with the `clean` method, which will extract the array
+				// and then map the `format_netease` function over it.
+				return $this->clean(json_encode(array('songs' => $full_track_list)), 'songs');
 			break;
 
 			case 'tencent':
