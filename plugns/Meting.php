@@ -525,23 +525,16 @@ class Meting
 					}
 				}
 
-				// Step 3: Reconstruct the final JSON to match the frontend's expectation.
-				// Use the playlist info from Step 1 and the full track list from Step 2.
-				$final_data = array(
-					'playlist' => array(
-						'id' => $playlist_info['id'],
-						'name' => $playlist_info['name'],
-						'coverImgUrl' => $playlist_info['coverImgUrl'],
-						'creator' => $playlist_info['creator'],
-						'tracks' => $full_track_list // Use the complete list of tracks
-					)
-				);
-				
-				// Manually format the track details inside the final structure
-				$final_data['playlist']['tracks'] = array_map(array($this, 'format_netease'), $final_data['playlist']['tracks']);
+				// Step 3: Reconstruct the final JSON.
+				$response_data['playlist']['tracks'] = $full_track_list;
 
-				// Return the correctly structured JSON, no need for clean() anymore.
-				return json_encode($final_data);
+				// Respect the format parameter
+				if ($this->format) {
+					return $this->clean(json_encode($response_data), 'playlist.tracks');
+				} else {
+					// Return the raw-like data structure that api.php expects
+					return json_encode($response_data);
+				}
 			break;
 
 			case 'tencent':
