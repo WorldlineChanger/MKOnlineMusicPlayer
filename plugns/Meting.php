@@ -461,11 +461,11 @@ class Meting
 				// This implements the "get all track IDs, then get details in chunks" method.
 				// It is consistent with the approach used by official clients to get full playlists.
 
-				// Step 1: Get all track IDs from the playlist.
-				// Using the `/playlist/track/all` endpoint is the cleanest way.
-				$api_get_ids = array(
+				// Step 1: Get playlist details, which includes all track IDs.
+				// We use `/v6/playlist/detail` as it reliably returns both playlist info and full trackIds.
+				$api_get_playlist = array(
 					'method' => 'POST',
-					'url'    => 'http://music.163.com/api/playlist/track/all',
+					'url'    => 'http://music.163.com/api/v6/playlist/detail',
 					'body'   => array(
 						'id' => $id,
 						'n'  => 100000,
@@ -475,24 +475,35 @@ class Meting
 				);
 				
 				// Execute without auto-formatting to get the raw JSON
-				$raw_data = $this->format(false)->exec($api_get_ids);
-				$playlist_data = json_decode($raw_data, true);
+				$raw_data = $this->format(false)->exec($api_get_playlist);
+				$response_data = json_decode($raw_data, true);
 
-				// The 'track/all' endpoint returns 'privileges'. We need to extract IDs from it.
-				if (!isset($playlist_data['privileges'])) {
-					return json_encode([]); // Return empty if no track IDs found
+				// Check if we got the playlist and track IDs
+				if (!isset($response_data['playlist']) || !isset($response_data['playlist']['trackIds'])) {
+					// Return a valid structure with empty data to prevent frontend errors.
+					return json_encode(array(
+						'playlist' => array(
+							'id' => $id,
+							'name' => '歌单加载失败',
+							'coverImgUrl' => '',
+							'creator' => array('nickname' => '未知'),
+							'tracks' => array()
+						)
+					));
 				}
+				
+				// Store the playlist info, we'll need it for the final response
+				$playlist_info = $response_data['playlist'];
 
 				$track_ids = array_map(function ($track) {
 					return $track['id'];
-				}, $playlist_data['privileges']);
+				}, $playlist_info['trackIds']);
 
 				// Step 2: Get details for all tracks in chunks.
 				$id_chunks = array_chunk($track_ids, 500); // Process in chunks of 500
 				$full_track_list = [];
 
 				foreach ($id_chunks as $chunk) {
-					// Prepare the 'c' parameter for the song detail API, which expects a JSON array of objects
 					$c_param = array_map(function($trackId) {
 						return ['id' => $trackId];
 					}, $chunk);
@@ -506,7 +517,7 @@ class Meting
 						'encode' => 'netease_AESCBC',
 					);
 
-					$raw_details = $this->exec($api_get_details); // exec will keep format as false
+					$raw_details = $this->exec($api_get_details);
 					$details_data = json_decode($raw_details, true);
 
 					if (isset($details_data['songs'])) {
@@ -514,13 +525,23 @@ class Meting
 					}
 				}
 
-				// Step 3: Format the final result using the class's standard formatter.
-				$this->format(true); // Re-enable formatting for the final step
+				// Step 3: Reconstruct the final JSON to match the frontend's expectation.
+				// Use the playlist info from Step 1 and the full track list from Step 2.
+				$final_data = array(
+					'playlist' => array(
+						'id' => $playlist_info['id'],
+						'name' => $playlist_info['name'],
+						'coverImgUrl' => $playlist_info['coverImgUrl'],
+						'creator' => $playlist_info['creator'],
+						'tracks' => $full_track_list // Use the complete list of tracks
+					)
+				);
 				
-				// Wrap the result in a 'songs' key and use 'songs' as the rule.
-				// This makes it compatible with the `clean` method, which will extract the array
-				// and then map the `format_netease` function over it.
-				return $this->clean(json_encode(array('songs' => $full_track_list)), 'songs');
+				// Manually format the track details inside the final structure
+				$final_data['playlist']['tracks'] = array_map(array($this, 'format_netease'), $final_data['playlist']['tracks']);
+
+				// Return the correctly structured JSON, no need for clean() anymore.
+				return json_encode($final_data);
 			break;
 
 			case 'tencent':
