@@ -432,48 +432,49 @@ function ajaxShare(music) {
 // 新的图像地址
 function changeCover(music) {
     var img = music.pic;    // 获取歌曲封面
-    var animate = false,imgload = false;
     
-    if(!img) {  // 封面为空
-        ajaxPic(music, changeCover);    // 获取歌曲封面图
-        img == "err";    // 暂时用无图像占个位...
+    if (!img) {  // 封面为空
+        ajaxPic(music, function(newMusic) {
+            // 递归调用，确保获取到图片
+            changeCover(newMusic);
+        });
+        return; // 退出当前函数，等待图片加载
     }
     
-    if(img == "err") {
+    if (img == "err") {
         img = "images/player_cover.png";
-    } else {
-        if(mkPlayer.mcoverbg === true && rem.isMobile)      // 移动端封面
-        {    
-            $("#music-cover").load(function(){
-                $("#mobile-blur").css('background-image', 'url("' + img + '")');
-            });
-        } 
-        else if(mkPlayer.coverbg === true && !rem.isMobile)     // PC端封面
-        { 
-            $("#music-cover").load(function(){
-                if(animate) {   // 渐变动画也已完成
-                    $("#blur-img").backgroundBlur(img);    // 替换图像并淡出
-                    $("#blur-img").animate({opacity:"1"}, 2000); // 背景更换特效
-                } else {
-                    imgload = true;     // 告诉下面的函数，图片已准备好
-                }
-                
-            });
-            
-            // 渐变动画
-            $("#blur-img").animate({opacity: "0.2"}, 1000, function(){
-                if(imgload) {   // 如果图片已经加载好了
-                    $("#blur-img").backgroundBlur(img);    // 替换图像并淡出
-                    $("#blur-img").animate({opacity:"1"}, 2000); // 背景更换特效
-                } else {
-                    animate = true;     // 等待图像加载完
-                }
-            });
-        }
     }
     
-    $("#music-cover").attr("src", img);     // 改变右侧封面
-    $(".sheet-item[data-no='1'] .sheet-cover").attr('src', img);    // 改变正在播放列表的图像
+    // --- 新增的封面切换逻辑 ---
+    var $cover = $("#music-cover");
+    
+    // 1. 先将当前封面淡出
+    $cover.css('opacity', 0);
+    
+    // 2. 使用 Image 对象预加载新图片
+    var tempImg = new Image();
+    tempImg.src = img;
+    
+    tempImg.onload = function() {
+        // 3. 图片加载完成后，更新 src 并淡入
+        $cover.attr('src', img);
+        $cover.css('opacity', 1);
+        
+        // --- 保留并整合原有的背景模糊逻辑 ---
+        if ((mkPlayer.coverbg === true && !rem.isMobile) || (mkPlayer.mcoverbg === true && rem.isMobile)) {
+            if (rem.isMobile) {
+                // 移动端背景
+                $("#mobile-blur").css('background-image', 'url("' + img + '")');
+            } else {
+                // PC端背景模糊效果
+                $("#blur-img").backgroundBlur(img);
+            }
+        }
+    };
+    // --- 封面切换逻辑结束 ---
+    
+    // 更新“正在播放”列表的封面
+    $(".sheet-item[data-no='1'] .sheet-cover").attr('src', img);
 }
 
 

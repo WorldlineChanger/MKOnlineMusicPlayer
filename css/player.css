@@ -517,6 +517,8 @@ body {
     vertical-align: middle;
     width: 186px;
     height: 186px;
+    opacity: 1;
+    transition: opacity .5s ease-in-out;
 }
 
 /* 歌词显示区域 */
