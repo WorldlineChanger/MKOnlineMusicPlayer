@@ -497,7 +497,7 @@ class Meting
 
 				$track_ids = array_map(function ($track) {
 					return $track['id'];
-				}, $playlist_info['trackIds']);
+				}, $response_data['playlist']['trackIds']);
 
 				// Step 2: Get details for all tracks in chunks.
 				$id_chunks = array_chunk($track_ids, 500); // Process in chunks of 500
@@ -809,9 +809,8 @@ class Meting
 	{
 		switch ($this->server) {
 			case 'netease':
-				return array(
+				$header = array(
 					'Referer'			=> 'https://music.163.com/',
-					'Cookie'			=> 'appver=8.2.30; os=iPhone OS; osver=15.0; EVNSM=1.0.0; buildver=2206; channel=distribution; machineid=iPhone13.3',
 					'User-Agent'		=> 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 CloudMusic/0.1.1 NeteaseMusic/8.2.30',
 					'X-Real-IP'			=> long2ip(mt_rand(1884815360, 1884890111)),
 					'Accept'			=> '*/*',
@@ -819,6 +818,10 @@ class Meting
 					'Connection'		=> 'keep-alive',
 					'Content-Type'		=> 'application/x-www-form-urlencoded',
 				);
+				if (!isset($this->header['Cookie'])) {
+					$header['Cookie'] = 'os=pc; appver=2.9.7';
+				}
+				return $header;
 			break;
 
 			case 'tencent':
