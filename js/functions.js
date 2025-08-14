@@ -3,6 +3,7 @@
  * 封装函数及UI交互模块
  * 编写：mengkun(https://mkblog.cn)
  * 时间：2018-3-11
+ * 更新：2025-8-14
  *************************************************/
 // 判断是否是移动设备
 var isMobile = {  
@@ -431,50 +432,64 @@ function ajaxShare(music) {
 // 改变右侧封面图像
 // 新的图像地址
 function changeCover(music) {
-    var img = music.pic;    // 获取歌曲封面
+    var music_pic = music.pic;    // 获取歌曲封面
+    var DEFAULT_COVER = 'images/player_cover.png';
     
-    if (!img) {  // 封面为空
+    // 封面为空，则 ajax 获取
+    if (!music_pic) {
         ajaxPic(music, function(newMusic) {
-            // 递归调用，确保获取到图片
-            changeCover(newMusic);
+            changeCover(newMusic); // 获取成功后再次调用
         });
-        return; // 退出当前函数，等待图片加载
+        return;
     }
     
-    if (img == "err") {
-        img = "images/player_cover.png";
+    // 获取失败，使用默认封面
+    if (music_pic === "err") {
+        music_pic = DEFAULT_COVER;
     }
     
-    // --- 新增的封面切换逻辑 ---
     var $cover = $("#music-cover");
+    
+    // 如果当前显示的图片和新图片相同，则不执行动画
+    if ($cover.attr('src') === music_pic) {
+        return;
+    }
     
     // 1. 先将当前封面淡出
     $cover.css('opacity', 0);
     
-    // 2. 使用 Image 对象预加载新图片
-    var tempImg = new Image();
-    tempImg.src = img;
-    
-    tempImg.onload = function() {
-        // 3. 图片加载完成后，更新 src 并淡入
-        $cover.attr('src', img);
-        $cover.css('opacity', 1);
+    // 2. 延时执行，确保淡出动画能够播放
+    setTimeout(function() {
+        // 3. 预加载新图片
+        var tempImg = new Image();
+        tempImg.src = music_pic;
         
-        // --- 保留并整合原有的背景模糊逻辑 ---
-        if ((mkPlayer.coverbg === true && !rem.isMobile) || (mkPlayer.mcoverbg === true && rem.isMobile)) {
-            if (rem.isMobile) {
-                // 移动端背景
-                $("#mobile-blur").css('background-image', 'url("' + img + '")');
-            } else {
-                // PC端背景模糊效果
-                $("#blur-img").backgroundBlur(img);
+        // 4. 图片加载成功
+        tempImg.onload = function() {
+            // 更新 src 并淡入
+            $cover.attr('src', music_pic);
+            $cover.css('opacity', 1);
+            
+            // 更新背景模糊
+            if ((mkPlayer.coverbg === true && !rem.isMobile) || (mkPlayer.mcoverbg === true && rem.isMobile)) {
+                if (rem.isMobile) {
+                    $("#mobile-blur").css('background-image', 'url("' + music_pic + '")');
+                } else {
+                    $("#blur-img").backgroundBlur(music_pic);
+                }
             }
-        }
-    };
-    // --- 封面切换逻辑结束 ---
+        };
+        
+        // 5. 图片加载失败，则回退到默认封面并淡入
+        tempImg.onerror = function() {
+            $cover.attr('src', DEFAULT_COVER);
+            $cover.css('opacity', 1);
+        };
+        
+    }, 500); // 延时时间应与 CSS 中的 transition 时间一致
     
     // 更新“正在播放”列表的封面
-    $(".sheet-item[data-no='1'] .sheet-cover").attr('src', img);
+    $(".sheet-item[data-no='1'] .sheet-cover").attr('src', music_pic);
 }
 
 
