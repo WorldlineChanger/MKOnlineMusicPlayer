@@ -4,7 +4,7 @@ use DOMDocument;
 
 class Meting
 {
-	const VERSION = '1.5.20';
+	const VERSION = '1.6.0';
 
 	public $raw;
 	public $data;
