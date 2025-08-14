@@ -91,6 +91,9 @@ function orderChange() {
             orderDiv.attr("title", "随机播放");
             layer.msg("随机播放");
             rem.order = 3;
+            // 生成随机播放列表
+            rem.randomList = generateRandomIndexList();
+            rem.randomNext = 0;
     }
 }
 
@@ -155,10 +158,16 @@ function nextMusic() {
         case 1,2: 
             playList(rem.playid + 1);
         break;
-        case 3: 
-            if (musicList[1] && musicList[1].item.length) {
-                var id = parseInt(Math.random() * musicList[1].item.length);
-                playList(id);
+        case 3:
+            if (rem.randomList && rem.randomList.length > 0) {
+                // 播放随机列表中的下一首
+                playList(rem.randomList[rem.randomNext]);
+                rem.randomNext++;
+                // 如果列表播放完毕，重新生成随机列表
+                if (rem.randomNext >= rem.randomList.length) {
+                    rem.randomList = generateRandomIndexList();
+                    rem.randomNext = 0;
+                }
             }
         break;
         default:
@@ -225,6 +234,12 @@ function listClick(no) {
         
         // 正在播放 列表项已发生变更，进行保存
         playerSavedata('playing', musicList[1].item);   // 保存正在播放列表
+        
+        // 如果是随机播放模式，则更新随机列表
+        if (rem.order === 3) {
+            rem.randomList = generateRandomIndexList();
+            rem.randomNext = 0;
+        }
     } else {    // 普通列表
         // 与之前不是同一个列表了（在播放别的列表的歌曲）或者是首次播放
         if((rem.dislist !== rem.playlist && rem.dislist !== 1) || rem.playlist === undefined) {
@@ -233,6 +248,12 @@ function listClick(no) {
             
             // 正在播放 列表项已发生变更，进行保存
             playerSavedata('playing', musicList[1].item);   // 保存正在播放列表
+            
+            // 如果是随机播放模式，则更新随机列表
+            if (rem.order === 3) {
+                rem.randomList = generateRandomIndexList();
+                rem.randomNext = 0;
+            }
             
             // 刷新正在播放的列表的动画
             refreshSheet();     // 更改正在播放的列表的显示
@@ -460,7 +481,38 @@ mkpgb.prototype = {
         }
         return true;
     }
-};  
+};
+
+// 生成随机播放列表
+function generateRandomIndexList() {
+    var list = [];
+    if(musicList[1] && musicList[1].item.length > 0) {
+        for (var i = 0; i < musicList[1].item.length; i++) {
+            list.push(i);
+        }
+        list = shuffle(list);
+    }
+    return list;
+}
+
+// 随机播放算法 (Fisher-Yates Shuffle)
+function shuffle(array) {
+    let currentIndex = array.length,  randomIndex;
+
+    // While there remain elements to shuffle.
+    while (currentIndex != 0) {
+
+        // Pick a remaining element.
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+
+        // And swap it with the current element.
+        [array[currentIndex], array[randomIndex]] = [
+        array[randomIndex], array[currentIndex]];
+    }
+
+    return array;
+}
 
 // 快捷键切歌，代码来自 @茗血(https://www.52benxi.cn/)
 document.onkeydown = function showkey(e) {
