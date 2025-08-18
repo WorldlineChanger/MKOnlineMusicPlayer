@@ -3,7 +3,7 @@
  * 封装函数及UI交互模块
  * 编写：mengkun(https://mkblog.cn)
  * 时间：2018-3-11
- * 更新：2025-8-14
+ * 更新：2025-8-18
  *************************************************/
 // 判断是否是移动设备
 var isMobile = {  
@@ -21,6 +21,108 @@ var isMobile = {
     },  
     any: function() {
         return (isMobile.Android() || isMobile.BlackBerry() || isMobile.iOS() || isMobile.Windows());  
+    }
+};
+
+// 虚拟列表模块
+var virtualList = {
+    itemHeight: 50, // 每个列表项的高度
+    bufferCount: 10, // 缓冲区项目数
+    scrollTop: 0, // 滚动位置
+    isScrolling: false, // 是否正在滚动
+    init: function(container) {
+        var that = this;
+        this.container = container;
+        this.scrollTop = 0; // 每次加载新列表时重置滚动位置
+        
+        // 非移动端，需要处理 mCustomScrollbar
+        if (!rem.isMobile) {
+            this.container.mCustomScrollbar("destroy"); // 先销毁，以便重新初始化
+            this.container.mCustomScrollbar({
+                theme:"minimal",
+                advanced:{
+                    updateOnContentResize: true
+                },
+                callbacks:{
+                    onScroll: function() {
+                        that.scrollTop = Math.abs(this.mcs.top);
+                        // 使用 requestAnimationFrame 优化滚动性能
+                        if (!that.isScrolling) {
+                            window.requestAnimationFrame(function() {
+                                that.render();
+                                that.isScrolling = false;
+                            });
+                            that.isScrolling = true;
+                        }
+                    }
+                }
+            });
+        } else { // 移动端，使用原生滚动
+            this.container.on('scroll', function() {
+                that.scrollTop = $(this).scrollTop();
+                // 使用 requestAnimationFrame 优化滚动性能
+                if (!that.isScrolling) {
+                    window.requestAnimationFrame(function() {
+                        that.render();
+                        that.isScrolling = false;
+                    });
+                    that.isScrolling = true;
+                }
+            });
+        }
+    },
+    render: function(keepPosition) {
+        var list = musicList[rem.dislist];
+        if (!list || !list.item) return;
+
+        var itemCount = list.item.length;
+        var containerHeight = this.container.height();
+        
+        var visibleCount = Math.ceil(containerHeight / this.itemHeight);
+        var startIndex = Math.floor(this.scrollTop / this.itemHeight);
+        var endIndex = startIndex + visibleCount;
+
+        startIndex = Math.max(0, startIndex - this.bufferCount);
+        endIndex = Math.min(itemCount - 1, endIndex + this.bufferCount);
+        
+        var content = '';
+        for (var i = startIndex; i <= endIndex; i++) {
+            var item = list.item[i];
+            if (item) {
+                content += this.createItemHtml(i, item.name, item.artist, item.album);
+            }
+        }
+
+        var topOffset = startIndex * this.itemHeight;
+
+        // 使用占位符撑开总高度
+        var placeholder = '<div style="height:' + (itemCount * this.itemHeight) + 'px;"></div>';
+        var listContent = '<div style="position: absolute; top: ' + topOffset + 'px; left: 0; right: 0;">' + content + '</div>';
+        
+        var target = rem.isMobile ? this.container : this.container.find(".mCSB_container");
+        
+        target.html(placeholder + listContent);
+
+        if (keepPosition) {
+            if (rem.isMobile) {
+                this.container.scrollTop(this.scrollTop);
+            } else {
+                this.container.mCustomScrollbar("scrollTo", this.scrollTop, { scrollInertia: 0 });
+            }
+        }
+        
+        // 重新应用播放状态
+        refreshList();
+    },
+    createItemHtml: function(index, name, auth, album) {
+        var no = index + 1;
+        return '<div class="list-item" data-no="' + index + '">' +
+            '    <span class="list-num">' + no + '</span>' +
+            '    <span class="list-mobile-menu"></span>' +
+            '    <span class="music-album">' + album + '</span>' +
+            '    <span class="auth-name">' + auth + '</span>' +
+            '    <span class="music-name">' + name + '</span>' +
+            '</div>';
     }
 };
 
@@ -517,22 +619,16 @@ function loadList(list) {
         }
     }
     
+    var targetContainer = rem.isMobile ? rem.mainList : $("#main-list");
+    virtualList.init(targetContainer); // 初始化虚拟列表
+    
     rem.mainList.html('');   // 清空列表中原有的元素
     addListhead();      // 向列表中加入列表头
     
     if(musicList[list].item.length == 0) {
         addListbar("nodata");   // 列表中没有数据
     } else {
-        
-        // 逐项添加数据
-        for(var i=0; i<musicList[list].item.length; i++) {
-            var tmpMusic = musicList[list].item[i];
-            
-            addItem(i + 1, tmpMusic.name, tmpMusic.artist, tmpMusic.album);
-            
-            // 音乐链接均有有效期限制,重新显示列表时清空处理
-            if(list == 1 || list == 2) tmpMusic.url = "";
-        }
+        virtualList.render(true); // 渲染可见项
         
         // 列表加载完成后的处理
         if(list == 1 || list == 2) {    // 历史记录和正在播放列表允许清空
@@ -577,14 +673,30 @@ function addListhead() {
 // 列表中新增一项
 // 参数：编号、名字、歌手、专辑
 function addItem(no, name, auth, album) {
-    var html = '<div class="list-item" data-no="' + (no - 1) + '">' +
-    '    <span class="list-num">' + no + '</span>' +
-    '    <span class="list-mobile-menu"></span>' +
-    '    <span class="music-album">' + album + '</span>' +
-    '    <span class="auth-name">' + auth + '</span>' +
-    '    <span class="music-name">' + name + '</span>' +
-    '</div>'; 
-    rem.mainList.append(html);
+    // 由于虚拟列表会自己生成HTML，这个函数现在可以被virtualList.createItemHtml替代
+    // 但为了兼容旧的调用（例如搜索加载更多），暂时保留它，但实际渲染由virtualList处理
+    // 在loadList中，这个函数不再被直接循环调用
+    var tmpMusic = {
+        name: name,
+        artist: auth,
+        album: album
+    };
+    
+    // 兼容搜索加载
+    var list = musicList[rem.dislist];
+    var existingIndex = -1;
+    
+    // 简单的去重逻辑
+    for (var i = 0; i < list.item.length; i++) {
+        if (list.item[i].name === name && list.item[i].artist === auth && list.item[i].album === album) {
+            existingIndex = i;
+            break;
+        }
+    }
+    
+    if (existingIndex === -1) {
+        list.item.push(tmpMusic);
+    }
 }
 
 // 加载列表中的提示条
