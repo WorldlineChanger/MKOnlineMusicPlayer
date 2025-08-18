@@ -150,15 +150,38 @@ function audioPause() {
 
 // 播放上一首歌
 function prevMusic() {
-    playList(rem.playid - 1);
+    switch (rem.order ? rem.order : 1) {
+        case 1:     // 单曲循环
+        case 2:     // 列表循环
+            playList(rem.playid - 1);
+            break;
+        case 3:     // 随机播放
+            if (rem.randomList && rem.randomList.length > 0) {
+                // 播放随机列表中的上一首
+                rem.randomNext -= 2;
+                // 边界检查
+                if (rem.randomNext < 0) {
+                    rem.randomNext = rem.randomList.length - 1;
+                }
+                playList(rem.randomList[rem.randomNext]);
+                rem.randomNext++;
+            } else {    // 随机列表不存在，则播放上一首
+                playList(rem.playid - 1);
+            }
+            break;
+        default:
+            playList(rem.playid - 1);
+            break;
+    }
 }
 
 // 播放下一首歌
 function nextMusic() {
     switch (rem.order ? rem.order : 1) {
-        case 1,2: 
+        case 1:     // 单曲循环
+        case 2:     // 列表循环
             playList(rem.playid + 1);
-        break;
+            break;
         case 3:
             if (rem.randomList && rem.randomList.length > 0) {
                 // 播放随机列表中的下一首
