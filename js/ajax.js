@@ -3,6 +3,7 @@
  * Ajax 后台数据交互请求模块
  * 编写：mengkun(https://mkblog.cn)
  * 时间：2018-3-11
+ * 更新：2025-8-18
  *************************************************/
 
 // ajax加载搜索结果
@@ -75,6 +76,12 @@ function ajaxSearch() {
             rem.loadPage ++;    // 已加载的列数+1
             
             dataBox("list");    // 在主界面显示出播放列表
+            
+            // 初始化虚拟列表并渲染
+            var targetContainer = rem.isMobile ? rem.mainList : $("#main-list");
+            virtualList.init(targetContainer);
+            virtualList.render(true);
+            
             refreshList();  // 刷新列表，添加正在播放样式
             
             if(no < mkPlayer.loadcount) {
