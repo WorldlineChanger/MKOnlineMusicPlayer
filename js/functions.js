@@ -44,15 +44,14 @@ var virtualList = {
                     updateOnContentResize: true
                 },
                 callbacks:{
-                    onScroll: function() {
+                    whileScrolling: function() {
                         that.scrollTop = Math.abs(this.mcs.top);
-                        // 使用 requestAnimationFrame 优化滚动性能
                         if (!that.isScrolling) {
+                            that.isScrolling = true;
                             window.requestAnimationFrame(function() {
                                 that.render();
                                 that.isScrolling = false;
                             });
-                            that.isScrolling = true;
                         }
                     }
                 }
@@ -60,13 +59,12 @@ var virtualList = {
         } else { // 移动端，使用原生滚动
             this.container.on('scroll', function() {
                 that.scrollTop = $(this).scrollTop();
-                // 使用 requestAnimationFrame 优化滚动性能
                 if (!that.isScrolling) {
+                    that.isScrolling = true;
                     window.requestAnimationFrame(function() {
                         that.render();
                         that.isScrolling = false;
                     });
-                    that.isScrolling = true;
                 }
             });
         }
