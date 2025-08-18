@@ -59,6 +59,7 @@ var virtualList = {
         } else { // 移动端，使用原生滚动
             this.container.on('scroll', function() {
                 that.scrollTop = $(this).scrollTop();
+                // 使用 requestAnimationFrame 优化滚动性能
                 if (!that.isScrolling) {
                     that.isScrolling = true;
                     window.requestAnimationFrame(function() {
@@ -672,7 +673,7 @@ function addListhead() {
 // 参数：编号、名字、歌手、专辑
 function addItem(no, name, auth, album) {
     // 由于虚拟列表会自己生成HTML，这个函数现在可以被virtualList.createItemHtml替代
-    // 但为了兼容旧的调用（例如搜索加载更多），暂时保留它，但实际渲染由virtualList处理
+    // 但为了兼容旧的调用（如搜索加载更多），暂时保留，但实际渲染由virtualList处理
     // 在loadList中，这个函数不再被直接循环调用
     var tmpMusic = {
         name: name,
