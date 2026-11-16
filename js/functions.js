@@ -3,7 +3,7 @@
  * 封装函数及UI交互模块
  * 编写：mengkun(https://mkblog.cn)
  * 时间：2018-3-11
- * 更新：2025-8-18
+ * 更新：2026-11-16
  *************************************************/
 // 判断是否是移动设备
 var isMobile = {  
@@ -831,7 +831,7 @@ function dataBox(choose) {
             if($(".btn[data-action='player']").css('display') !== 'none') {
                 $("#player").hide();
             } else if ($("#player").css('display') == 'none') {
-                $("#player").fadeIn();
+                $("#player").fadeIn(alignLyric);
             }
             $("#main-list").fadeIn();
             $("#sheet").fadeOut();
@@ -846,7 +846,7 @@ function dataBox(choose) {
             if($(".btn[data-action='player']").css('display') !== 'none') {
                 $("#player").hide();
             } else if ($("#player").css('display') == 'none') {
-                $("#player").fadeIn();
+                $("#player").fadeIn(alignLyric);
             }
             $("#sheet").fadeIn();
             $("#main-list").fadeOut();
@@ -854,7 +854,7 @@ function dataBox(choose) {
         break;
         
         case "player":  // 显示播放器
-            $("#player").fadeIn();
+            $("#player").fadeIn(alignLyric);
             $("#sheet").fadeOut();
             $("#main-list").fadeOut();
             $(".btn[data-action='player']").addClass('active');
@@ -916,7 +916,7 @@ function initList() {
             }
             
          // 列表不是用户列表，并且信息为空，需要ajax读取列表
-        }else if(!musicList[i].creatorID && (musicList[i].item == undefined || (i>2 && musicList[i].item.length == 0))) {   
+        }else if(!musicList[i].creatorID && (musicList[i].item == undefined || (i>2 && musicList[i].item.length == 0))) {
             musicList[i].item = [];
             if(musicList[i].id) {   // 列表ID已定义
                 // ajax获取列表信息

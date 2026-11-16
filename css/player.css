@@ -4,7 +4,7 @@
  * 播放器样式表文件
  * 编写：mengkun(https://mkblog.cn)
  * 时间：2018-3-13
- * 更新：2025-8-14
+ * 更新：2026-11-16
  *************************************************/
 blockquote, body, button, dd, dl, dt, fieldset, form, h1, h2, h3, h4, h5, h6, hr, html, input, lengend, li, ol, p, pre, td, textarea, th, ul {
     margin: 0;
@@ -288,6 +288,11 @@ body {
     border-bottom: 1px solid rgba(150,150,150,.1);
     cursor: default;
     position: relative;
+}
+
+/* 歌曲行的 50px 高度包含边框，与虚拟列表的 itemHeight 一致。 */
+.music-list .list-item[data-no] {
+    box-sizing: border-box;
 }
 
 /* 正在播放的那项 */

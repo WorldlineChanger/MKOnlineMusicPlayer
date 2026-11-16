@@ -3,6 +3,7 @@
  * 歌词解析及滚动模块
  * 编写：mengkun(http://mkblog.cn)
  * 时间：2017-9-13
+ * 更新：2026-11-16
  *************************************************/
  
 var lyricArea = $("#lyric");    // 歌词显示容器
@@ -78,11 +79,26 @@ function scrollLyric(time) {
     rem.lastLyric = time;  // 记录方便下次使用
     $(".lplaying").removeClass("lplaying");     // 移除其余句子的正在播放样式
     $(".lrc-item[data-no='" + i + "']").addClass("lplaying");    // 加上正在播放样式
-    
-    var scroll = (lyricArea.children().height() * i) - ($(".lyric").height() / 2); 
-    lyricArea.stop().animate({scrollTop: scroll}, 1000);  // 平滑滚动到当前歌词位置(更改这个数值可以改变歌词滚动速度，单位：毫秒)
-    
+    alignLyric(true);
 }
+
+// 按高亮行的实际位置定位，单双行混排时不会累积偏差。
+function alignLyric(smooth) {
+    var viewport = lyricArea[0];
+    var line = lyricArea.find(".lplaying")[0];
+    if(!line || !viewport.clientHeight) return;
+
+    var areaRect = viewport.getBoundingClientRect();
+    var lineRect = line.getBoundingClientRect();
+    var scroll = viewport.scrollTop + (lineRect.top + lineRect.bottom) / 2 - areaRect.top - viewport.clientHeight / 2;
+    scroll = Math.max(0, Math.min(scroll, viewport.scrollHeight - viewport.clientHeight));
+
+    lyricArea.stop(true);
+    if(smooth === true) lyricArea.animate({scrollTop: scroll}, 1000);
+    else lyricArea.scrollTop(scroll);
+}
+
+$(window).resize(alignLyric);
 
 // 解析歌词
 // 这一函数来自 https://github.com/TivonJJ/html5-music-player
