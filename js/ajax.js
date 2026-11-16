@@ -3,7 +3,7 @@
  * Ajax 后台数据交互请求模块
  * 编写：mengkun(https://mkblog.cn)
  * 时间：2018-3-11
- * 更新：2025-8-18
+ * 更新：2026-11-16
  *************************************************/
 
 // ajax加载搜索结果
@@ -13,53 +13,49 @@ function ajaxSearch() {
         return false;
     }
     
-    if(rem.loadPage == 1) { // 弹出搜索提示
+    var page = rem.loadPage;
+    var request = rem.searchRequest = {};
+    if(page === 1) { // 弹出搜索提示
         var tmpLoading = layer.msg('搜索中', {icon: 16,shade: 0.01});
     }
-    
+
+    function searchError(status) {
+        if(request !== rem.searchRequest) return;
+        if(page > 1 && rem.dislist === 0) {
+            $("#list-foot").addClass("list-loadmore").text("点击加载更多...");
+        }
+        layer.msg('搜索结果获取失败' + (status ? ' - ' + status : ''));
+    }
+
     $.ajax({
         type: mkPlayer.method, 
         url: mkPlayer.api, 
-        data: "types=search&count=" + mkPlayer.loadcount + "&source=" + rem.source + "&pages=" + rem.loadPage + "&name=" + rem.wd,
+        data: "types=search&count=" + mkPlayer.loadcount + "&source=" + rem.source + "&pages=" + page + "&name=" + rem.wd,
         dataType : "jsonp",
         complete: function(XMLHttpRequest, textStatus) {
             if(tmpLoading) layer.close(tmpLoading);    // 关闭加载中动画
         },  // complete
         success: function(jsonData){
-            
+            if(request !== rem.searchRequest) return;
+            if(!Array.isArray(jsonData)) return searchError();
+
             // 调试信息输出
             if(mkPlayer.debug) {
                 console.debug("搜索结果数：" + jsonData.length);
             }
             
-            if(rem.loadPage == 1)   // 加载第一页，清空列表
-            {
-                if(jsonData.length === 0)   // 返回结果为零
-                {
-                    layer.msg('没有找到相关歌曲', {anim:6});
-                    return false;
-                }
-                musicList[0].item = [];
-                rem.mainList.html('');   // 清空列表中原有的元素
-                addListhead();      // 加载列表头
-            } else {
-                $("#list-foot").remove();     //已经是加载后面的页码了，删除之前的“加载更多”提示
+            var resetList = page === 1 || rem.dislist !== 0;
+            if(page === 1 && jsonData.length === 0) {
+                layer.msg('没有找到相关歌曲', {anim:6});
+                if(rem.dislist !== 0) return;
             }
-            
-            if(jsonData.length === 0)
-            {
-                addListbar("nomore");  // 加载完了
-                return false;
-            }
-            
-            var tempItem = [], no = musicList[0].item.length;
-            
+
+            var items = [];
             for (var i = 0; i < jsonData.length; i++) {
-                no ++;
-                tempItem =  {
+                items.push({
                     id: jsonData[i].id,  // 音乐ID
                     name: jsonData[i].name,  // 音乐名字
-                    artist: jsonData[i].artist[0], // 艺术家名字
+                    artist: (jsonData[i].artist || [])[0] || '', // 艺术家名字
                     album: jsonData[i].album,    // 专辑名字
                     source: jsonData[i].source,     // 音乐来源
                     url_id: jsonData[i].url_id,  // 链接ID
@@ -67,33 +63,29 @@ function ajaxSearch() {
                     lyric_id: jsonData[i].lyric_id,  // 歌词ID
                     pic: null,    // 专辑图片
                     url: null   // mp3链接
-                };
-                musicList[0].item.push(tempItem);   // 保存到搜索结果临时列表中
-                addItem(no, tempItem.name, tempItem.artist, tempItem.album);  // 在前端显示
+                });
             }
-            
+
+            // 仅更新搜索列表，不修改当前歌单或与它共享过的播放队列。
+            musicList[0].item = (page === 1 ? [] : musicList[0].item).concat(items);
             rem.dislist = 0;    // 当前显示的是搜索列表
-            rem.loadPage ++;    // 已加载的列数+1
+            rem.loadPage = page + 1;
             
             dataBox("list");    // 在主界面显示出播放列表
             
-            // 初始化虚拟列表并渲染
-            var targetContainer = rem.isMobile ? rem.mainList : $("#main-list");
-            virtualList.init(targetContainer);
-            virtualList.render(true);
-            
-            refreshList();  // 刷新列表，添加正在播放样式
-            
-            if(no < mkPlayer.loadcount) {
-                addListbar("nomore");  // 没加载满，说明已经加载完了
+            var bar = jsonData.length < mkPlayer.loadcount ? "nomore" : "more";
+            if(resetList) {
+                renderMusicList(bar);
             } else {
-                addListbar("more");     // 还可以点击加载更多
+                virtualList.render();
+                $("#list-foot").remove();
+                addListbar(bar);
+                virtualList.updateScrollbar();
             }
-            
-            if(rem.loadPage == 2) listToTop();    // 播放列表滚动到顶部
         },   //success
         error: function(XMLHttpRequest, textStatus, errorThrown) {
-            layer.msg('搜索结果获取失败 - ' + XMLHttpRequest.status);
+            if(request !== rem.searchRequest) return;
+            searchError(XMLHttpRequest.status);
             console.error(XMLHttpRequest + textStatus + errorThrown);
         }   // error
     });//ajax
@@ -304,9 +296,16 @@ function ajaxPlayList(lid, id, callback) {
 // ajax加载歌词
 // 参数：音乐ID，回调函数
 function ajaxLyric(music, callback) {
+    if(musicList[1].item[rem.playid] !== music) return;
+
+    var request = rem.lyricRequest = {};
+    function isCurrent() {
+        return request === rem.lyricRequest && musicList[1].item[rem.playid] === music;
+    }
+
     lyricTip('歌词加载中...');
     
-    if(!music.lyric_id) callback('');  // 没有歌词ID，直接返回
+    if(!music.lyric_id) return callback('');  // 没有歌词ID，直接返回
     
     $.ajax({
         type: mkPlayer.method,
@@ -314,21 +313,19 @@ function ajaxLyric(music, callback) {
         data: "types=lyric&id=" + music.lyric_id + "&source=" + music.source,
         dataType : "jsonp",
         success: function(jsonData){
+            if(!isCurrent()) return;
             // 调试信息输出
             if (mkPlayer.debug) {
                 console.debug("歌词获取成功");
             }
             
-            if (jsonData.lyric) {
-                callback(jsonData.lyric, music.lyric_id, jsonData.tlyric);    // 回调函数
-            } else {
-                callback('', music.lyric_id);    // 回调函数
-            }
+            callback(jsonData && jsonData.lyric, jsonData && jsonData.tlyric);
         },   //success
         error: function(XMLHttpRequest, textStatus, errorThrown) {
+            if(!isCurrent()) return;
             layer.msg('歌词读取失败 - ' + XMLHttpRequest.status);
             console.error(XMLHttpRequest + textStatus + errorThrown);
-            callback('', music.lyric_id);    // 回调函数
+            callback('');
         }   // error   
     });//ajax
 }

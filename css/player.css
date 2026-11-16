@@ -290,6 +290,16 @@ body {
     position: relative;
 }
 
+/* 虚拟滚动只更新轨道中的可见歌曲。 */
+.virtual-list-track {
+    position: relative;
+}
+.virtual-list-rows {
+    position: absolute;
+    left: 0;
+    right: 0;
+}
+
 /* 歌曲行的 50px 高度包含边框，与虚拟列表的 itemHeight 一致。 */
 .music-list .list-item[data-no] {
     box-sizing: border-box;

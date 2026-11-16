@@ -26,19 +26,15 @@ var isMobile = {
 
 // 虚拟列表模块
 var virtualList = {
-    itemHeight: 50, // 每个列表项的高度
+    itemHeight: 50, // 与 player.css 中的歌曲行高度一致（含边框）
     bufferCount: 10, // 缓冲区项目数
     scrollTop: 0, // 滚动位置
-    isScrolling: false, // 是否正在滚动
     init: function(container) {
         var that = this;
         this.container = container;
-        this.scrollTop = 0; // 每次加载新列表时重置滚动位置
-        
-        // 非移动端，需要处理 mCustomScrollbar
+
         if (!rem.isMobile) {
-            this.container.mCustomScrollbar("destroy"); // 先销毁，以便重新初始化
-            this.container.mCustomScrollbar({
+            container.mCustomScrollbar({
                 theme:"minimal",
                 advanced:{
                     updateOnContentResize: true
@@ -46,71 +42,63 @@ var virtualList = {
                 callbacks:{
                     whileScrolling: function() {
                         that.scrollTop = Math.abs(this.mcs.top);
-                        if (!that.isScrolling) {
-                            that.isScrolling = true;
-                            window.requestAnimationFrame(function() {
-                                that.render();
-                                that.isScrolling = false;
-                            });
-                        }
+                        that.scheduleRender();
                     }
                 }
             });
-        } else { // 移动端，使用原生滚动
-            this.container.on('scroll', function() {
-                that.scrollTop = $(this).scrollTop();
-                // 使用 requestAnimationFrame 优化滚动性能
-                if (!that.isScrolling) {
-                    that.isScrolling = true;
-                    window.requestAnimationFrame(function() {
-                        that.render();
-                        that.isScrolling = false;
-                    });
-                }
+            rem.mainList = container.find('.mCSB_container');
+        } else {
+            rem.mainList = container;
+            container.on('scroll.virtualList', function() {
+                that.scrollTop = this.scrollTop;
+                that.scheduleRender();
             });
         }
+        $(window).on('resize.virtualList', function() { that.scheduleRender(); });
     },
-    render: function(keepPosition) {
+    scheduleRender: function() {
+        if (this.renderPending) return;
+        this.renderPending = true;
+        var that = this;
+        var onFrame = window.requestAnimationFrame || function(callback) { window.setTimeout(callback, 16); };
+        onFrame.call(window, function() {
+            that.renderPending = false;
+            that.render();
+        });
+    },
+    mount: function() {
+        this.rows = $('<div class="virtual-list-rows"></div>');
+        this.track = $('<div class="virtual-list-track"></div>').append(this.rows).appendTo(rem.mainList);
+        this.render(true);
+    },
+    updateScrollbar: function() {
+        if (!rem.isMobile) this.container.mCustomScrollbar('update');
+    },
+    render: function(force) {
+        if (!this.track || this.track[0].parentNode !== rem.mainList[0]) return;
         var list = musicList[rem.dislist];
         if (!list || !list.item) return;
 
         var itemCount = list.item.length;
-        var containerHeight = this.container.height();
-        
-        var visibleCount = Math.ceil(containerHeight / this.itemHeight);
-        var startIndex = Math.floor(this.scrollTop / this.itemHeight);
-        var endIndex = startIndex + visibleCount;
+        var trackScroll = this.scrollTop - this.track[0].offsetTop;
+        var viewportHeight = this.container[0].clientHeight;
+        var startIndex = Math.max(0, Math.min(itemCount, Math.floor(trackScroll / this.itemHeight) - this.bufferCount));
+        var endIndex = Math.max(startIndex, Math.min(itemCount, Math.ceil((trackScroll + viewportHeight) / this.itemHeight) + this.bufferCount));
+        if (force || this.itemCount !== itemCount) this.track.height(itemCount * this.itemHeight);
+        if (!force && this.startIndex === startIndex && this.endIndex === endIndex && this.itemCount === itemCount) return;
 
-        startIndex = Math.max(0, startIndex - this.bufferCount);
-        endIndex = Math.min(itemCount - 1, endIndex + this.bufferCount);
-        
+        this.itemCount = itemCount;
+        this.startIndex = startIndex;
+        this.endIndex = endIndex;
         var content = '';
-        for (var i = startIndex; i <= endIndex; i++) {
+        for (var i = startIndex; i < endIndex; i++) {
             var item = list.item[i];
             if (item) {
                 content += this.createItemHtml(i, item.name, item.artist, item.album);
             }
         }
-
-        var topOffset = startIndex * this.itemHeight;
-
-        // 使用占位符撑开总高度
-        var placeholder = '<div style="height:' + (itemCount * this.itemHeight) + 'px;"></div>';
-        var listContent = '<div style="position: absolute; top: ' + topOffset + 'px; left: 0; right: 0;">' + content + '</div>';
-        
-        var target = rem.isMobile ? this.container : this.container.find(".mCSB_container");
-        
-        target.html(placeholder + listContent);
-
-        if (keepPosition) {
-            if (rem.isMobile) {
-                this.container.scrollTop(this.scrollTop);
-            } else {
-                this.container.mCustomScrollbar("scrollTo", this.scrollTop, { scrollInertia: 0 });
-            }
-        }
-        
-        // 重新应用播放状态
+        // 仅更新歌曲行，保留轨道外的列表头和底部操作。
+        this.rows.css('top', startIndex * this.itemHeight).html(content);
         refreshList();
     },
     createItemHtml: function(index, name, auth, album) {
@@ -138,12 +126,12 @@ $(function(){
     initAudio();    // 初始化 audio 标签，事件绑定
     
     
+    virtualList.init($('#main-list'));
     if(rem.isMobile) {  // 加了滚动条插件和没加滚动条插件所操作的对象是不一样的
         rem.sheetList = $("#sheet");
-        rem.mainList = $("#main-list");
     } else {
         // 滚动条初始化(只在非移动端启用滚动条控件)
-        $("#main-list,#sheet").mCustomScrollbar({
+        $("#sheet").mCustomScrollbar({
             theme:"minimal",
             advanced:{
                 updateOnContentResize: true // 数据更新后自动刷新滚动条
@@ -151,7 +139,6 @@ $(function(){
         });
         
         rem.sheetList = $("#sheet .mCSB_container");
-        rem.mainList = $("#main-list .mCSB_container");  
     }
     
     addListhead();  // 列表头
@@ -241,8 +228,7 @@ $(function(){
     
     // 点击加载更多
     $(".music-list").on("click",".list-loadmore", function() {
-        $(".list-loadmore").removeClass('list-loadmore');
-        $(".list-loadmore").html('加载中...');
+        $(this).removeClass('list-loadmore').text('加载中...');
         ajaxSearch();
     });
     
@@ -618,39 +604,21 @@ function loadList(list) {
         }
     }
     
-    var targetContainer = rem.isMobile ? rem.mainList : $("#main-list");
-    virtualList.init(targetContainer); // 初始化虚拟列表
-    
-    rem.mainList.html('');   // 清空列表中原有的元素
-    addListhead();      // 向列表中加入列表头
-    
-    if(musicList[list].item.length == 0) {
-        addListbar("nodata");   // 列表中没有数据
-    } else {
-        virtualList.render(true); // 渲染可见项
-        
-        // 列表加载完成后的处理
-        if(list == 1 || list == 2) {    // 历史记录和正在播放列表允许清空
-            addListbar("clear");    // 清空列表
-        }
-        
-        if(rem.playlist === undefined) {    // 未曾播放过
-            if(mkPlayer.autoplay == true) pause();  // 设置了自动播放，则自动播放
-        } else {
-            refreshList();  // 刷新列表，添加正在播放样式
-        }
-        
-        listToTop();    // 播放列表滚动到顶部
-    }
+    var hasTracks = musicList[list].item.length > 0;
+    renderMusicList(!hasTracks ? 'nodata' : (list == 1 || list == 2 ? 'clear' : null));
+    if (hasTracks && rem.playlist === undefined && mkPlayer.autoplay === true) pause();
 }
 
-// 播放列表滚动到顶部
-function listToTop() {
-    if(rem.isMobile) {
-        $("#main-list").animate({scrollTop: 0}, 200);
-    } else {
-        $("#main-list").mCustomScrollbar("scrollTo", 0, "top");
-    }
+// 新列表重建一次结构，后续滚动只更新虚拟歌曲行。
+function renderMusicList(bar) {
+    rem.mainList.empty();
+    virtualList.scrollTop = 0;
+    addListhead();
+    if (musicList[rem.dislist].item.length) virtualList.mount();
+    if (bar) addListbar(bar);
+    virtualList.updateScrollbar();
+    if (rem.isMobile) virtualList.container.scrollTop(0);
+    else virtualList.container.mCustomScrollbar('scrollTo', 'top', { timeout: 0, scrollInertia: 0 });
 }
 
 // 向列表中加入列表头
@@ -667,35 +635,6 @@ function addListhead() {
     '    </span>' +
     '</div>';
     rem.mainList.append(html);
-}
-
-// 列表中新增一项
-// 参数：编号、名字、歌手、专辑
-function addItem(no, name, auth, album) {
-    // 由于虚拟列表会自己生成HTML，这个函数现在可以被virtualList.createItemHtml替代
-    // 但为了兼容旧的调用（如搜索加载更多），暂时保留，但实际渲染由virtualList处理
-    // 在loadList中，这个函数不再被直接循环调用
-    var tmpMusic = {
-        name: name,
-        artist: auth,
-        album: album
-    };
-    
-    // 兼容搜索加载
-    var list = musicList[rem.dislist];
-    var existingIndex = -1;
-    
-    // 简单的去重逻辑
-    for (var i = 0; i < list.item.length; i++) {
-        if (list.item[i].name === name && list.item[i].artist === auth && list.item[i].album === album) {
-            existingIndex = i;
-            break;
-        }
-    }
-    
-    if (existingIndex === -1) {
-        list.item.push(tmpMusic);
-    }
 }
 
 // 加载列表中的提示条
@@ -777,12 +716,13 @@ function refreshList() {
     
     $(".list-playing").removeClass("list-playing");        // 移除其它的正在播放
     
-    if(rem.paused !== true) {   // 没有暂停
+    var playing = musicList[1].item[rem.playid];
+    if(rem.paused !== true && playing) {   // 没有暂停且播放列表仍有当前歌曲
         for(var i=0; i<musicList[rem.dislist].item.length; i++) {
             // 与正在播放的歌曲 id 相同
             if((musicList[rem.dislist].item[i].id !== undefined) && 
-              (musicList[rem.dislist].item[i].id == musicList[1].item[rem.playid].id) && 
-              (musicList[rem.dislist].item[i].source == musicList[1].item[rem.playid].source)) {
+              (musicList[rem.dislist].item[i].id == playing.id) &&
+              (musicList[rem.dislist].item[i].source == playing.source)) {
                 $(".list-item[data-no='" + i + "']").addClass("list-playing");  // 添加正在播放样式
                 
                 return true;    // 一般列表中只有一首，找到了赶紧跳出
